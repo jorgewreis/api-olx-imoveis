@@ -31,6 +31,7 @@ from olx_imoveis.listing_display import (
     format_location,
     format_price,
     oferta_label,
+    sort_imoveis,
 )
 from olx_imoveis.service import OlxImoveisService
 
@@ -240,9 +241,10 @@ class OlxImoveisApp(ctk.CTk):
         else:
             self._auth_status.configure(
                 text="Sem login — busca e detalhes funcionam normalmente.\n"
-                "OAuth no .env libera telefone completo (opcional)."
+                "Coloque o .env na pasta do app, em %LOCALAPPDATA%\\OlxImoveis\n"
+                "ou na raiz do projeto (OLX_OAUTH_CLIENT_ID e SECRET)."
             )
-            self._btn_login.configure(state="normal")
+            self._btn_login.configure(state="disabled")
             self._btn_logout.configure(state="disabled")
 
     def _on_oauth_login(self) -> None:
@@ -584,7 +586,11 @@ class OlxImoveisApp(ctk.CTk):
             if self._last_result:
                 self._last_result.items.extend(result.items)
                 self._last_result.tem_mais = result.tem_mais
-            self.after(0, lambda: self._render_results(result, append=True))
+                self._last_result.items = sort_imoveis(
+                    self._last_result.items, self._current_filters
+                )
+            merged = self._last_result
+            self.after(0, lambda: self._render_results(merged) if merged else None)
 
         self._run_bg(work)
 
@@ -692,6 +698,7 @@ class OlxImoveisApp(ctk.CTk):
         items = self._last_result.items
         total = len(items)
         self._set_status(f"Exportando {total} anúncio(s) — carregando detalhes…")
+        filters = self._current_filters
 
         def work() -> None:
             try:
@@ -701,7 +708,7 @@ class OlxImoveisApp(ctk.CTk):
                     fmt,
                     path,
                     filter_summary=summary,
-                    filters=self._current_filters,
+                    filters=filters,
                 )
             except Exception as e:
                 logging.exception("Falha na exportação")

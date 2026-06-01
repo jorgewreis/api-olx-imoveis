@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
-    from olx_imoveis.models import ImovelResumo, SearchFilters, TipoOferta
+    from olx_imoveis.models import ImovelResumo, SearchFilters
 
 from olx_imoveis.models import MAX_ALUGUEL_PRECO, MIN_VENDA_PRECO, TipoOferta
+
+T = TypeVar("T", bound="ImovelResumo")
+
+_SORT_TIPO = {"ALUGUEL": 0, "VENDA": 1}
+_NO_PRECO = 999_999_999_999
 
 
 def clean_text(text: str | None) -> str:
@@ -64,6 +69,21 @@ def oferta_label(item: ImovelResumo, filters: SearchFilters | None = None) -> st
         if item.preco <= MAX_ALUGUEL_PRECO:
             return "ALUGUEL"
     return "VENDA"
+
+
+def imovel_sort_key(item: ImovelResumo, filters: SearchFilters | None = None) -> tuple:
+    """Estado > Cidade > Bairro > Tipo (aluguel/venda) > preço crescente."""
+    estado = clean_text(item.estado or "").casefold()
+    cidade = clean_text(item.cidade or "").casefold()
+    bairro = clean_text(item.bairro or "").casefold()
+    oferta = oferta_label(item, filters)
+    tipo = _SORT_TIPO.get(oferta, 1)
+    preco = item.preco if item.preco is not None else _NO_PRECO
+    return (estado, cidade, bairro, tipo, preco, item.list_id)
+
+
+def sort_imoveis(items: list[T], filters: SearchFilters | None = None) -> list[T]:
+    return sorted(items, key=lambda it: imovel_sort_key(it, filters))
 
 
 def item_to_export_row(item: ImovelResumo, filters: SearchFilters | None = None) -> dict[str, str]:

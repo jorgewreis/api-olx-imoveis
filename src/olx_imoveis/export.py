@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 
 from olx_imoveis.export_format import detail_to_export_record
-from olx_imoveis.listing_display import clean_text
+from olx_imoveis.listing_display import clean_text, sort_imoveis
 from olx_imoveis.models import ImovelDetalhe, SearchFilters
 
 EXPORT_COLUMNS = ["list_id", "linha_1", "linha_2", "url", "descricao"]
@@ -38,6 +38,7 @@ def export_results(
     filter_summary: str | None = None,
     filters: SearchFilters | None = None,
 ) -> None:
+    items = sort_imoveis(items, filters)
     rows = [detail_to_export_record(it, filters) for it in items]
     if fmt == ExportFormat.CSV:
         _export_csv(rows, path)
@@ -111,6 +112,10 @@ def _export_pdf(
     from fpdf import FPDF
     from fpdf.enums import XPos, YPos
 
+    title_size = 11
+    body_size = 8
+    line_height = 4
+
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
@@ -123,29 +128,47 @@ def _export_pdf(
     else:
         body_font = "Helvetica"
 
-    pdf.set_font(body_font, "B", 13)
-    pdf.cell(0, 9, "Resultados OLX Imoveis", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font(body_font, size=9)
+    pdf.set_font(body_font, "B", title_size)
+    pdf.cell(0, line_height + 2, "Resultados OLX Imoveis", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font(body_font, size=body_size)
     pdf.cell(
         0,
-        5,
+        line_height,
         f"Exportado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
         new_x=XPos.LMARGIN,
         new_y=YPos.NEXT,
     )
     if filter_summary:
-        pdf.multi_cell(0, 5, f"Filtros: {clean_text(filter_summary)}")
-    pdf.cell(0, 5, f"Total: {len(rows)} anuncio(s)", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(4)
+        pdf.multi_cell(
+            0,
+            line_height,
+            f"Filtros: {clean_text(filter_summary)}",
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
+    pdf.cell(0, line_height, f"Total: {len(rows)} anuncio(s)", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(3)
 
-    pdf.set_font(body_font, size=9)
+    pdf.set_font(body_font, size=body_size)
     content_width = pdf.epw
     for i, row in enumerate(rows, start=1):
-        pdf.set_font(body_font, "B", size=9)
-        pdf.multi_cell(content_width, 5, _pdf_safe(f"{i}. {row['linha_1']}"))
-        pdf.set_font(body_font, size=9)
-        pdf.multi_cell(content_width, 5, _pdf_safe(row["linha_2"]))
-        pdf.ln(2)
+        pdf.set_font(body_font, "B", size=body_size)
+        pdf.multi_cell(
+            content_width,
+            line_height,
+            _pdf_safe(f"{i}. {row['linha_1']}"),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
+        pdf.set_font(body_font, size=body_size)
+        pdf.multi_cell(
+            content_width,
+            line_height,
+            _pdf_safe(row["linha_2"]),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
+        pdf.ln(1.5)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(str(path))

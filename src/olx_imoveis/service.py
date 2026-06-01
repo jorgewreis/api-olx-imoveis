@@ -7,6 +7,7 @@ from olx_imoveis.cache import CacheStore
 from olx_imoveis.client import OlxHttpClient
 from olx_imoveis.config import settings
 from olx_imoveis.errors import OlxAuthError
+from olx_imoveis.listing_display import sort_imoveis
 from olx_imoveis.models import ImovelDetalhe, ImovelResumo, SearchFilters, SearchResult
 from olx_imoveis.parsers.common import resolve_detail_fetch_url
 from olx_imoveis.parsers.detail import parse_detail_page
@@ -48,6 +49,7 @@ class OlxImoveisService:
             cached = self._cache.get_json(cache_key)
             if cached:
                 result = SearchResult.model_validate(cached)
+                result.items = sort_imoveis(result.items, filters)
                 result.url_busca = url
                 return result
 
@@ -61,6 +63,7 @@ class OlxImoveisService:
             bairro=filters.bairro,
             tipo_anunciante=filters.tipo_anunciante,
         )
+        result.items = sort_imoveis(result.items, filters)
         result.url_busca = url
 
         if use_cache and result.items:
