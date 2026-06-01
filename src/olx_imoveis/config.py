@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     detail_cache_ttl_seconds: int = 86400
     max_retries: int = 3
 
+    oauth_client_id: str = ""
+    oauth_client_secret: str = ""
+    oauth_redirect_uri: str = "http://127.0.0.1:8765/oauth/callback"
+    oauth_scope: str = "basic_user_info"
+
     @property
     def app_data_dir(self) -> Path:
         base = Path.home() / "AppData" / "Local" / "OlxImoveis"
@@ -34,6 +39,10 @@ class Settings(BaseSettings):
     @property
     def disclaimer_flag_path(self) -> Path:
         return self.app_data_dir / ".disclaimer_accepted"
+
+    @property
+    def oauth_token_path(self) -> Path:
+        return self.app_data_dir / "oauth_token.json"
 
 
 settings = Settings()

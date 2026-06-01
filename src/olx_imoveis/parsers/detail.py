@@ -14,6 +14,7 @@ from olx_imoveis.parsers.common import (
     find_ad_object,
     is_professional_ad,
     map_ad_detail_payload,
+    merge_seller_contact,
     resolve_detail_fetch_url,
 )
 
@@ -39,7 +40,7 @@ def parse_detail_page(html: str, url: str) -> ImovelDetalhe:
     imagens = _collect_images(ad)
     atributos = _collect_attributes(ad)
     anunciante = _parse_seller(ad, descricao=descricao)
-    telefone, mascarado = _parse_phone(ad)
+    telefone, mascarado = _parse_phone(ad, descricao=descricao)
 
     return ImovelDetalhe(
         **base,
@@ -54,21 +55,23 @@ def parse_detail_page(html: str, url: str) -> ImovelDetalhe:
 
 
 def _extract_ad_from_html(html: str, url: str) -> dict[str, Any] | None:
+    ad: dict[str, Any] | None = None
     if "__NEXT_DATA__" in html:
         try:
             data = extract_next_data(html)
             ad = find_ad_object(data)
-            if ad:
-                return ad
         except OlxParseError:
             pass
 
-    ad_detail = extract_embedded_json_object(html, "adDetail")
-    if ad_detail:
-        ld_json = extract_ld_json(html)
-        return map_ad_detail_payload(ad_detail, ld_json=ld_json, page_url=url)
+    if not ad:
+        ad_detail = extract_embedded_json_object(html, "adDetail")
+        if ad_detail:
+            ld_json = extract_ld_json(html)
+            ad = map_ad_detail_payload(ad_detail, ld_json=ld_json, page_url=url)
 
-    return None
+    if ad:
+        merge_seller_contact(ad, html)
+    return ad
 
 
 def _first_str(*values: Any) -> str | None:
@@ -132,7 +135,7 @@ def _parse_seller(ad: dict[str, Any], *, descricao: str | None = None) -> Anunci
     )
 
 
-def _parse_phone(ad: dict[str, Any]) -> tuple[str | None, bool]:
+def _parse_phone(ad: dict[str, Any], *, descricao: str | None = None) -> tuple[str | None, bool]:
     phone = ad.get("phone") or ad.get("phoneNumber")
     if isinstance(phone, dict):
         phone = phone.get("phone") or phone.get("number")
@@ -147,18 +150,68 @@ def _parse_phone(ad: dict[str, Any]) -> tuple[str | None, bool]:
     if not phone and isinstance(contact, dict):
         phone = contact.get("phone") or contact.get("phones")
 
-    if not phone:
-        return None, False
+    if phone:
+        formatted, masked = _normalize_phone(str(phone).strip())
+        if formatted:
+            return formatted, masked
 
-    s = str(phone).strip()
-    masked = "*" in s or "X" in s.upper()
-    digits = re.sub(r"\D", "", s)
-    if len(digits) >= 10:
-        if len(digits) == 11:
-            formatted = f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
-        elif len(digits) == 10:
-            formatted = f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
-        else:
-            formatted = digits
-        return formatted, masked
-    return s if not masked else (s, True)
+    masked_phone = _first_str(ad.get("maskedPhone"))
+    if masked_phone:
+        return _format_masked_phone(masked_phone, _first_str(ad.get("ddd"))), True
+
+    if descricao:
+        from_text = _phone_from_text(descricao)
+        if from_text:
+            return from_text, False
+
+    return None, False
+
+
+def _normalize_phone(raw: str) -> tuple[str | None, bool]:
+    masked = "*" in raw or "..." in raw or "X" in raw.upper()
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) < 10:
+        return (raw, True) if masked else (None, False)
+    return _format_digits(digits), masked
+
+
+def _format_digits(digits: str) -> str:
+    if len(digits) == 11:
+        return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
+    if len(digits) == 10:
+        return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
+    return digits
+
+
+def _format_masked_phone(masked: str, ddd: str | None) -> str:
+    cleaned = masked.strip()
+    has_ellipsis = "..." in cleaned
+    digits = re.sub(r"\D", "", cleaned.replace(".", ""))
+
+    if len(digits) >= 11:
+        return _format_digits(digits[:11]) + ("..." if has_ellipsis else "")
+    if len(digits) >= 8:
+        return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}{'...' if has_ellipsis else ''}"
+    if ddd and digits:
+        return f"({ddd}) {digits}{'...' if has_ellipsis else ''}"
+    return cleaned
+
+
+_PHONE_IN_TEXT = re.compile(
+    r"(?<!\d)(?:\+55\s?)?(?:\(?(\d{2})\)?[\s.-]?)?((?:9[\s.-]?)?\d{4}[\s.-]?\d{4})(?!\d)"
+)
+
+
+def _phone_from_text(text: str) -> str | None:
+    for match in _PHONE_IN_TEXT.finditer(text):
+        ddd = match.group(1) or ""
+        local = re.sub(r"\D", "", match.group(2) or "")
+        digits = re.sub(r"\D", "", ddd + local)
+        if len(digits) == 10 and digits[0] == "9":
+            continue
+        if len(digits) not in (10, 11):
+            continue
+        if len(digits) == 11 and digits[2] != "9":
+            continue
+        return _format_digits(digits)
+    return None

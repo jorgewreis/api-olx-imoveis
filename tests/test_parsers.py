@@ -26,9 +26,41 @@ def test_parse_detail_fixture():
     assert "varanda" in (detail.descricao or "")
     assert detail.anunciante.nome == "Imobiliária Exemplo"
     assert detail.anunciante.is_professional is True
-    assert detail.telefone is not None
+    assert detail.telefone == "(11) 98765-4321"
+    assert detail.telefone_mascarado is False
     assert len(detail.imagens) == 2
     assert "Quartos" in detail.atributos
+
+
+def test_parse_detail_masked_phone_from_html():
+    html = (FIXTURES / "detail_ad_detail_sample.html").read_text(encoding="utf-8")
+    seller_block = (
+        '{"phone":"","phoneHidden":false,"phoneVerified":false,'
+        '"phoneExist":true,"maskedPhone":"73991788..."}'
+    )
+    html = html.replace("</body>", f"<script>{seller_block}</script></body>")
+    detail = parse_detail_page(
+        html,
+        "https://ba.olx.com.br/sul-da-bahia/imoveis/casa-em-ilheus-100002",
+    )
+    assert detail.telefone is not None
+    assert detail.telefone_mascarado is True
+    assert detail.telefone.startswith("(73)")
+    assert "9917" in detail.telefone
+
+
+def test_parse_detail_phone_from_description():
+    html = (FIXTURES / "detail_ad_detail_sample.html").read_text(encoding="utf-8")
+    html = html.replace(
+        "Casa ampla com quintal.",
+        "Casa ampla com quintal. Contato: 73 98150-4575",
+    )
+    detail = parse_detail_page(
+        html,
+        "https://ba.olx.com.br/sul-da-bahia/imoveis/casa-em-ilheus-100002",
+    )
+    assert detail.telefone == "(73) 98150-4575"
+    assert detail.telefone_mascarado is False
 
 
 def test_parse_detail_ad_detail_fixture():

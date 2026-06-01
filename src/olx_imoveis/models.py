@@ -61,6 +61,7 @@ class ImovelResumo(BaseModel):
     titulo: str
     preco: int | None = None
     preco_label: str | None = None
+    tipo_oferta: TipoOferta | None = None
     url: str
     bairro: str | None = None
     cidade: str | None = None

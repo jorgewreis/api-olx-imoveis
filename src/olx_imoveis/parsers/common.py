@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 
 from olx_imoveis.errors import OlxParseError
+from olx_imoveis.models import OLX_CATEGORY_ALUGUEL, OLX_CATEGORY_VENDA, TipoOferta
 
 _LISTING_OFFER_SEGMENTS = {"venda", "aluguel", "temporada", "quartos"}
 
@@ -162,6 +163,47 @@ def is_professional_ad(ad: dict[str, Any], *, descricao: str | None = None) -> b
     if texts and _CRECI_PATTERN.search("\n".join(texts)):
         return True
     return False
+
+
+def extract_seller_contact_from_html(html: str) -> dict[str, Any]:
+    """Extrai bloco de contato do vendedor embutido no HTML (maskedPhone, etc.)."""
+    decoded = html_module.unescape(html)
+    match = re.search(
+        r'\{"phone":"[^"]*","phoneHidden":(?:true|false),"phoneVerified":(?:true|false),'
+        r'"phoneExist":(?:true|false),"maskedPhone":"([^"]*)"\}',
+        decoded,
+    )
+    if not match:
+        return {}
+
+    block = match.group(0)
+    contact: dict[str, Any] = {"maskedPhone": match.group(1) or None}
+
+    for key in ("phone",):
+        field = re.search(rf'"{key}":"([^"]*)"', block)
+        if field and field.group(1):
+            contact[key] = field.group(1)
+
+    for key in ("phoneExist", "phoneHidden", "phoneVerified"):
+        field = re.search(rf'"{key}":(true|false)', block)
+        if field:
+            contact[key] = field.group(1) == "true"
+
+    return contact
+
+
+def merge_seller_contact(ad: dict[str, Any], html: str) -> None:
+    """Enriquece o dict do anúncio com telefone parcial do HTML."""
+    contact = extract_seller_contact_from_html(html)
+    if not contact:
+        return
+    if contact.get("phone"):
+        ad.setdefault("phone", contact["phone"])
+    if contact.get("maskedPhone"):
+        ad["maskedPhone"] = contact["maskedPhone"]
+    for key in ("phoneExist", "phoneHidden", "phoneVerified"):
+        if key in contact:
+            ad[key] = contact[key]
 
 
 def _location_parts(ad: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
@@ -324,6 +366,7 @@ def map_ad_detail_payload(
         "title": ad_detail.get("subject"),
         "priceValue": ad_detail.get("price"),
         "body": descricao,
+        "ddd": ad_detail.get("ddd"),
         "location": {
             "neighbourhood": ad_detail.get("neighbourhood"),
             "municipality": ad_detail.get("municipality"),
@@ -392,6 +435,15 @@ def _normalize_olx_url(url: str, fallback_uf: str = "sp") -> str:
     return f"https://www.olx.com.br/{path}"
 
 
+def _offer_type_from_ad(ad: dict[str, Any]) -> TipoOferta | None:
+    code = ad.get("searchCategoryLevelOne")
+    if code == OLX_CATEGORY_VENDA:
+        return TipoOferta.VENDA
+    if code == OLX_CATEGORY_ALUGUEL:
+        return TipoOferta.ALUGUEL
+    return None
+
+
 def ad_to_resumo(ad: dict[str, Any], fallback_uf: str = "sp") -> dict[str, Any] | None:
     list_id = ad.get("listId") or ad.get("list_id") or ad.get("id")
     if list_id is None:
@@ -424,6 +476,7 @@ def ad_to_resumo(ad: dict[str, Any], fallback_uf: str = "sp") -> dict[str, Any] 
         "titulo": titulo,
         "preco": preco,
         "preco_label": preco_label,
+        "tipo_oferta": _offer_type_from_ad(ad),
         "url": url,
         "bairro": bairro,
         "cidade": cidade,

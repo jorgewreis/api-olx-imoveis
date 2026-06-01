@@ -14,9 +14,12 @@ from typing import Callable
 import customtkinter as ctk
 
 from olx_imoveis.config import settings
-from olx_imoveis.errors import OlxError, OlxParseError, OlxRateLimitError
+from olx_imoveis.auth import OlxOAuth, oauth_configured
+from olx_imoveis.errors import OlxError, OlxAuthError, OlxParseError, OlxRateLimitError
 from olx_imoveis.locations import DEFAULT_REGIAO_NOME, DEFAULT_UF, ESTADOS, load_neighborhoods, load_regions
 from olx_imoveis.models import (
+    MAX_ALUGUEL_PRECO,
+    MIN_VENDA_PRECO,
     ImovelDetalhe,
     ImovelResumo,
     SearchFilters,
@@ -63,6 +66,7 @@ class OlxImoveisApp(ctk.CTk):
 
         self._build_layout()
         self._populate_estados()
+        self._update_auth_status()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build_layout(self) -> None:
@@ -155,12 +159,44 @@ class OlxImoveisApp(ctk.CTk):
         ctk.CTkButton(
             parent, text="Exportar CSV", fg_color="gray", command=self._export_csv
         ).pack(fill="x", padx=12, pady=(0, 6))
+        self._build_auth_section(parent)
         ctk.CTkButton(parent, text="Sobre / Aviso legal", fg_color="transparent", command=self._show_about).pack(
             fill="x", padx=12, pady=(0, 12)
         )
 
         self._region_map: dict[str, str] = {}
         self._bairro_map: dict[str, str] = {}
+
+    def _build_auth_section(self, parent: ctk.CTkFrame) -> None:
+        auth_box = ctk.CTkFrame(parent, fg_color=("gray90", "gray20"))
+        auth_box.pack(fill="x", padx=12, pady=(0, 8))
+        ctk.CTkLabel(auth_box, text="Conta OLX (opcional)", font=ctk.CTkFont(weight="bold")).pack(
+            anchor="w", padx=8, pady=(8, 2)
+        )
+        self._auth_status = ctk.CTkLabel(
+            auth_box,
+            text="",
+            wraplength=240,
+            justify="left",
+            font=ctk.CTkFont(size=12),
+        )
+        self._auth_status.pack(anchor="w", padx=8, pady=(0, 6))
+        auth_btns = ctk.CTkFrame(auth_box, fg_color="transparent")
+        auth_btns.pack(fill="x", padx=8, pady=(0, 8))
+        self._btn_login = ctk.CTkButton(auth_btns, text="Entrar", width=90, command=self._on_oauth_login)
+        self._btn_login.pack(side="left")
+        self._btn_logout = ctk.CTkButton(
+            auth_btns, text="Sair", width=70, fg_color="gray", command=self._on_oauth_logout
+        )
+        self._btn_logout.pack(side="left", padx=(6, 0))
+        ctk.CTkButton(
+            auth_btns,
+            text="Código",
+            width=70,
+            fg_color="transparent",
+            border_width=1,
+            command=self._on_oauth_manual_code,
+        ).pack(side="left", padx=(6, 0))
 
     def _populate_estados(self) -> None:
         labels = [f"{uf.upper()} — {nome}" for uf, nome in sorted(ESTADOS.items())]
@@ -171,6 +207,73 @@ class OlxImoveisApp(ctk.CTk):
         )
         self._estado.set(default_label)
         self._load_regioes(default_label, prefer_regiao=DEFAULT_REGIAO_NOME)
+
+    def _update_auth_status(self) -> None:
+        oauth = self._service.oauth
+        if oauth.is_logged_in():
+            label = oauth.user_label() or "Conta OLX"
+            self._auth_status.configure(
+                text=f"Conectado: {label}\nExtras: telefone completo quando disponível."
+            )
+            self._btn_login.configure(state="disabled")
+            self._btn_logout.configure(state="normal")
+        elif oauth_configured():
+            self._auth_status.configure(
+                text="Sem login — busca e detalhes funcionam normalmente.\n"
+                "Entre na OLX para tentar obter telefone completo."
+            )
+            self._btn_login.configure(state="normal")
+            self._btn_logout.configure(state="disabled")
+        else:
+            self._auth_status.configure(
+                text="Sem login — busca e detalhes funcionam normalmente.\n"
+                "OAuth no .env libera telefone completo (opcional)."
+            )
+            self._btn_login.configure(state="normal")
+            self._btn_logout.configure(state="disabled")
+
+    def _on_oauth_login(self) -> None:
+        self._set_status("Abrindo login OLX — informe e-mail e senha no navegador…")
+        self._btn_login.configure(state="disabled")
+
+        def work() -> None:
+            try:
+                self._service.oauth.login_interactive()
+                self.after(0, self._update_auth_status)
+                self.after(0, lambda: self._set_status("Login OLX concluído."))
+            except OlxAuthError as e:
+                self.after(0, lambda: self._show_error(str(e)))
+                self.after(0, self._update_auth_status)
+            except Exception as e:
+                self.after(0, lambda: self._show_error(f"Erro no login: {e}"))
+                self.after(0, self._update_auth_status)
+
+        self._run_bg(work)
+
+    def _on_oauth_logout(self) -> None:
+        self._service.oauth.logout()
+        self._update_auth_status()
+        self._set_status("Sessão OLX encerrada.")
+
+    def _on_oauth_manual_code(self) -> None:
+        dialog = ctk.CTkInputDialog(
+            text="Cole a URL de retorno ou o código após login na OLX:",
+            title="Código OAuth OLX",
+        )
+        raw = dialog.get_input()
+        if not raw:
+            return
+
+        def work() -> None:
+            try:
+                code = OlxOAuth.extract_code_from_redirect(raw)
+                self._service.oauth.exchange_code(code)
+                self.after(0, self._update_auth_status)
+                self.after(0, lambda: self._set_status("Login OLX concluído (código manual)."))
+            except OlxAuthError as e:
+                self.after(0, lambda: self._show_error(str(e)))
+
+        self._run_bg(work)
 
     def _load_regioes(self, estado_label: str, prefer_regiao: str | None = None) -> None:
         uf = self._uf_from_label(estado_label)
@@ -311,11 +414,7 @@ class OlxImoveisApp(ctk.CTk):
             row.grid(row=start + i, column=0, sticky="ew", padx=4, pady=4)
             row.grid_columnconfigure(1, weight=1)
 
-            preco = item.preco_label or (
-                f"R$ {item.preco:,}".replace(",", ".") if item.preco else "Consulte"
-            )
-            loc = ", ".join(x for x in [item.bairro, item.cidade, item.estado] if x)
-            text = f"{item.titulo}\n{preco} — {loc}"
+            text = f"{self._format_listing_headline(item)}\n{item.titulo}"
 
             btn = ctk.CTkButton(
                 row,
@@ -331,6 +430,44 @@ class OlxImoveisApp(ctk.CTk):
         filtros = self._format_filter_summary(self._current_filters) if self._current_filters else ""
         prefix = f"{filtros} — " if filtros else ""
         self._set_status(f"{prefix}{len(result.items)} anúncio(s) exibido(s){total_txt}.")
+
+    def _format_listing_headline(self, item: ImovelResumo) -> str:
+        loc_parts: list[str] = []
+        if item.estado:
+            loc_parts.append(item.estado.upper())
+        if item.cidade:
+            loc_parts.append(item.cidade)
+        if item.bairro:
+            loc_parts.append(item.bairro)
+        loc = " - ".join(loc_parts) if loc_parts else "Local não informado"
+        tipo = self._tipo_oferta_label(item)
+        preco = self._format_item_price(item)
+        return f"{loc} | {tipo}: {preco}"
+
+    def _tipo_oferta_label(self, item: ImovelResumo) -> str:
+        ot = (self._current_filters.tipo_oferta if self._current_filters else None) or item.tipo_oferta
+        if ot is not None:
+            return ot.value.upper()
+        if item.preco is not None:
+            if item.preco >= MIN_VENDA_PRECO:
+                return "VENDA"
+            if item.preco <= MAX_ALUGUEL_PRECO:
+                return "ALUGUEL"
+        return "VENDA"
+
+    @staticmethod
+    def _format_item_price(item: ImovelResumo) -> str:
+        if item.preco is not None:
+            inteiro = f"{item.preco:,}".replace(",", ".")
+            return f"R$ {inteiro},00"
+        if item.preco_label:
+            label = item.preco_label.strip()
+            if not label.upper().startswith("R$"):
+                label = f"R$ {label}"
+            if "," not in label:
+                label = f"{label},00"
+            return label
+        return "Consulte"
 
     def _format_filter_summary(self, filters: SearchFilters) -> str:
         if filters.tipo_oferta is None:
@@ -471,10 +608,12 @@ class OlxImoveisApp(ctk.CTk):
                 tel_row, text="Copiar", width=80, command=lambda t=d.telefone: self._copy(t)
             ).pack(side="left", padx=8)
         else:
-            ctk.CTkLabel(
-                tel_row,
-                text="Telefone não disponível nos dados públicos. Abra o anúncio no site.",
-            ).pack(side="left")
+            hint = (
+                "Telefone não disponível nos dados públicos."
+                if self._service.oauth.is_logged_in()
+                else "Telefone completo indisponível. Entrada na OLX (opcional) pode revelar mais."
+            )
+            ctk.CTkLabel(tel_row, text=hint, wraplength=520, justify="left").pack(side="left")
 
         btn_row = ctk.CTkFrame(self._detail_frame, fg_color="transparent")
         btn_row.grid(row=r + 1, column=0, sticky="w", padx=8, pady=8)
