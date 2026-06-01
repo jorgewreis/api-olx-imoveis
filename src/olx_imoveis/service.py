@@ -7,7 +7,7 @@ from olx_imoveis.cache import CacheStore
 from olx_imoveis.client import OlxHttpClient
 from olx_imoveis.config import settings
 from olx_imoveis.errors import OlxAuthError
-from olx_imoveis.models import ImovelDetalhe, SearchFilters, SearchResult
+from olx_imoveis.models import ImovelDetalhe, ImovelResumo, SearchFilters, SearchResult
 from olx_imoveis.parsers.common import resolve_detail_fetch_url
 from olx_imoveis.parsers.detail import parse_detail_page
 from olx_imoveis.parsers.listing import parse_listing_page
@@ -125,3 +125,22 @@ class OlxImoveisService:
         if full:
             return detail.model_copy(update={"telefone": full, "telefone_mascarado": False})
         return detail
+
+    def fetch_export_details(self, items: list[ImovelResumo]) -> list[ImovelDetalhe]:
+        """Carrega detalhe de cada anúncio para exportação (descrição, telefone, etc.)."""
+        details: list[ImovelDetalhe] = []
+        for item in items:
+            try:
+                details.append(self.get_detail(item.url, use_cache=True))
+            except Exception as e:
+                logger.warning("Detalhe indisponível para exportação %s: %s", item.list_id, e)
+                base = item.model_dump()
+                details.append(
+                    ImovelDetalhe(
+                        **base,
+                        descricao=None,
+                        imagens=[],
+                        atributos={},
+                    )
+                )
+        return details

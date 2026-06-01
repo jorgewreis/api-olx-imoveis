@@ -689,20 +689,31 @@ class OlxImoveisApp(ctk.CTk):
         summary = (
             self._format_filter_summary(self._current_filters) if self._current_filters else None
         )
-        try:
-            export_results(
-                self._last_result.items,
-                fmt,
-                path,
-                filter_summary=summary,
-                filters=self._current_filters,
+        items = self._last_result.items
+        total = len(items)
+        self._set_status(f"Exportando {total} anúncio(s) — carregando detalhes…")
+
+        def work() -> None:
+            try:
+                details = self._service.fetch_export_details(items)
+                export_results(
+                    details,
+                    fmt,
+                    path,
+                    filter_summary=summary,
+                    filters=self._current_filters,
+                )
+            except Exception as e:
+                logging.exception("Falha na exportação")
+                self.after(0, lambda: self._show_error(f"Não foi possível exportar: {e}"))
+                return
+            self.after(
+                0,
+                lambda: messagebox.showinfo("Exportado", f"Arquivo {fmt.value} salvo em:\n{path}"),
             )
-        except Exception as e:
-            logging.exception("Falha na exportação")
-            self._show_error(f"Não foi possível exportar: {e}")
-            return
-        messagebox.showinfo("Exportado", f"Arquivo {fmt.value} salvo em:\n{path}")
-        self._set_status(f"Exportação {fmt.value} concluída.")
+            self.after(0, lambda: self._set_status(f"Exportação {fmt.value} concluída ({total} imóveis)."))
+
+        self._run_bg(work)
 
     def _show_about(self) -> None:
         messagebox.showinfo(
