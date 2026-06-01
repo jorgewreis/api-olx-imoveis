@@ -36,4 +36,4 @@ gh release create v1.0.0 dist/OlxImoveis.exe --title "v1.0.0" --notes "Primeira 
 
 ## Atualizar README com seu usuário
 
-Após o push, confira se os links em `README.md` apontam para o seu usuário GitHub (substitua `jwmenezes` se necessário).
+Após o push, confira se os links em `README.md` apontam para o seu usuário GitHub (usuario atual: `jorgewreis`).

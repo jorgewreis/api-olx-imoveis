@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)](https://www.microsoft.com/windows)
-[![CI](https://github.com/jwmenezes/api-olx-imoveis/actions/workflows/ci.yml/badge.svg)](https://github.com/jwmenezes/api-olx-imoveis/actions/workflows/ci.yml)
+[![CI](https://github.com/jorgewreis/api-olx-imoveis/actions/workflows/ci.yml/badge.svg)](https://github.com/jorgewreis/api-olx-imoveis/actions/workflows/ci.yml)
 
 Aplicativo desktop para **Windows** que facilita a **busca de imóveis** publicados na [OLX Brasil](https://www.olx.com.br), com filtros por localidade, tipo, preço e visualização de detalhes do anúncio e do anunciante.
 
@@ -61,13 +61,13 @@ flowchart LR
 
 ## Capturas de tela
 
-_Screenshots serão adicionados nas [Releases](https://github.com/jwmenezes/api-olx-imoveis/releases) após validação da interface. Execute o app localmente com `run_app.bat` para visualizar._
+_Screenshots serão adicionados nas [Releases](https://github.com/jorgewreis/api-olx-imoveis/releases) após validação da interface. Execute o app localmente com `run_app.bat` para visualizar._
 
 ## Instalação rápida
 
 ### Usuário final (executável)
 
-1. Acesse [Releases](https://github.com/jwmenezes/api-olx-imoveis/releases) e baixe `OlxImoveis.exe` (quando disponível).
+1. Acesse [Releases](https://github.com/jorgewreis/api-olx-imoveis/releases) e baixe `OlxImoveis.exe` (quando disponível).
 2. Execute o arquivo no Windows 10 ou superior.
 3. Aceite o aviso legal na primeira abertura e use os filtros na barra lateral.
 
@@ -76,7 +76,7 @@ _Screenshots serão adicionados nas [Releases](https://github.com/jwmenezes/api-
 Requisitos: Python 3.10+ no Windows.
 
 ```powershell
-git clone https://github.com/jwmenezes/api-olx-imoveis.git
+git clone https://github.com/jorgewreis/api-olx-imoveis.git
 cd api-olx-imoveis
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -89,7 +89,7 @@ O executável será gerado em `dist\OlxImoveis.exe`.
 ## Desenvolvimento
 
 ```powershell
-git clone https://github.com/jwmenezes/api-olx-imoveis.git
+git clone https://github.com/jorgewreis/api-olx-imoveis.git
 cd api-olx-imoveis
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -139,7 +139,7 @@ api-olx-imoveis/
 ## Publicar / clonar
 
 - **Publicar no seu GitHub:** siga [`docs/GITHUB_PUBLISH.md`](docs/GITHUB_PUBLISH.md) ou execute `.\scripts\publish-github.ps1` após `gh auth login`.
-- **Clonar:** `git clone https://github.com/jwmenezes/api-olx-imoveis.git` (ajuste o usuário se o repositório estiver em outra conta).
+- **Clonar:** `git clone https://github.com/jorgewreis/api-olx-imoveis.git` (ajuste o usuário se o repositório estiver em outra conta).
 
 ## Contribuições
 
