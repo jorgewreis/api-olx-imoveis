@@ -11,6 +11,13 @@ class TipoOferta(str, Enum):
     ALUGUEL = "aluguel"
 
 
+OLX_CATEGORY_VENDA = 1001
+OLX_CATEGORY_ALUGUEL = 1002
+
+MIN_VENDA_PRECO = 100_000
+MAX_ALUGUEL_PRECO = 20_000
+
+
 class TipoImovel(str, Enum):
     APARTAMENTOS = "apartamentos"
     CASAS = "casas"
@@ -20,12 +27,18 @@ class TipoImovel(str, Enum):
     QUARTOS = "quartos"
 
 
+class TipoAnunciante(str, Enum):
+    COMUM = "comum"
+    PROFISSIONAL = "profissional"
+
+
 class SearchFilters(BaseModel):
     estado: str = Field(description="Sigla UF, ex: sp")
     regiao: str = Field(default="estado-sp", description="Slug da região/cidade")
     bairro: str | None = Field(default=None, description="Slug do bairro opcional")
-    tipo_imovel: TipoImovel = TipoImovel.APARTAMENTOS
-    tipo_oferta: TipoOferta = TipoOferta.VENDA
+    tipo_imovel: TipoImovel | None = TipoImovel.APARTAMENTOS
+    tipo_oferta: TipoOferta | None = TipoOferta.VENDA
+    tipo_anunciante: TipoAnunciante | None = None
     preco_min: int | None = None
     preco_max: int | None = None
     quartos_min: int | None = None

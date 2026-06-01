@@ -31,6 +31,19 @@ def test_parse_detail_fixture():
     assert "Quartos" in detail.atributos
 
 
+def test_parse_detail_ad_detail_fixture():
+    html = (FIXTURES / "detail_ad_detail_sample.html").read_text(encoding="utf-8")
+    detail = parse_detail_page(
+        html,
+        "https://ba.olx.com.br/sul-da-bahia/imoveis/casa-em-ilheus-100002",
+    )
+    assert detail.list_id == "100002"
+    assert "quintal" in (detail.descricao or "")
+    assert detail.cidade == "Ilhéus"
+    assert detail.anunciante.nome == "Corretor Exemplo"
+    assert len(detail.imagens) == 1
+
+
 def test_parse_listing_missing_data():
     with pytest.raises(OlxParseError):
         parse_listing_page("<html><body>sem dados</body></html>")

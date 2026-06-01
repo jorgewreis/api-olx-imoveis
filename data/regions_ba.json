@@ -1,0 +1,26 @@
+{
+  "regioes": [
+    {"slug": "estado-ba", "nome": "Todo o estado"},
+    {"slug": "grande-salvador/salvador", "nome": "Salvador"},
+    {"slug": "sul-da-bahia/ilheus", "nome": "Ilhéus"},
+    {"slug": "sul-da-bahia", "nome": "Sul da Bahia (região)"},
+    {"slug": "sul-da-bahia/porto-seguro", "nome": "Porto Seguro"},
+    {"slug": "sul-da-bahia/itabuna", "nome": "Itabuna"},
+    {"slug": "centro-norte-ba/feira-de-santana", "nome": "Feira de Santana"},
+    {"slug": "centro-norte-ba/vitoria-da-conquista", "nome": "Vitória da Conquista"}
+  ],
+  "bairros": {
+    "sul-da-bahia/ilheus": [
+      {"slug": "boa-vista", "nome": "Boa Vista"},
+      {"slug": "centro", "nome": "Centro"},
+      {"slug": "cidade-nova", "nome": "Cidade Nova"},
+      {"slug": "hernani-sa", "nome": "Hernani Sá"},
+      {"slug": "jardim-atlantico", "nome": "Jardim Atlântico"},
+      {"slug": "jardim-saveia", "nome": "Jardim Savéia"},
+      {"slug": "nossa-senhora-da-vitoria", "nome": "Nossa Senhora da Vitória"},
+      {"slug": "pontal", "nome": "Pontal"},
+      {"slug": "sao-francisco", "nome": "São Francisco"},
+      {"slug": "sao-sebastiao", "nome": "São Sebastião"}
+    ]
+  }
+}

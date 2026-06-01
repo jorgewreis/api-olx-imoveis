@@ -15,12 +15,13 @@ import customtkinter as ctk
 
 from olx_imoveis.config import settings
 from olx_imoveis.errors import OlxError, OlxParseError, OlxRateLimitError
-from olx_imoveis.locations import ESTADOS, load_neighborhoods, load_regions
+from olx_imoveis.locations import DEFAULT_REGIAO_NOME, DEFAULT_UF, ESTADOS, load_neighborhoods, load_regions
 from olx_imoveis.models import (
     ImovelDetalhe,
     ImovelResumo,
     SearchFilters,
     SearchResult,
+    TipoAnunciante,
     TipoImovel,
     TipoOferta,
 )
@@ -42,6 +43,7 @@ TIPO_IMOVEL_LABELS = {
     TipoImovel.TEMPORADA: "Temporada",
     TipoImovel.QUARTOS: "Aluguel de quartos",
 }
+MOSTRAR_TODOS = "Mostrar todos"
 
 
 class OlxImoveisApp(ctk.CTk):
@@ -106,16 +108,24 @@ class OlxImoveisApp(ctk.CTk):
         self._bairro.pack(fill="x", padx=12, pady=(0, 8))
 
         ctk.CTkLabel(parent, text="Oferta").pack(anchor="w", padx=12)
-        self._oferta = ctk.CTkComboBox(parent, values=["Venda", "Aluguel"])
+        self._oferta = ctk.CTkComboBox(parent, values=[MOSTRAR_TODOS, "Venda", "Aluguel"])
         self._oferta.set("Venda")
         self._oferta.pack(fill="x", padx=12, pady=(0, 8))
 
         ctk.CTkLabel(parent, text="Tipo de imóvel").pack(anchor="w", padx=12)
         self._tipo = ctk.CTkComboBox(
-            parent, values=[TIPO_IMOVEL_LABELS[t] for t in TipoImovel]
+            parent,
+            values=[MOSTRAR_TODOS, *[TIPO_IMOVEL_LABELS[t] for t in TipoImovel]],
         )
         self._tipo.set(TIPO_IMOVEL_LABELS[TipoImovel.APARTAMENTOS])
         self._tipo.pack(fill="x", padx=12, pady=(0, 8))
+
+        ctk.CTkLabel(parent, text="Tipo de anunciante").pack(anchor="w", padx=12)
+        self._anunciante = ctk.CTkComboBox(
+            parent, values=[MOSTRAR_TODOS, "Comum", "Profissional"]
+        )
+        self._anunciante.set(MOSTRAR_TODOS)
+        self._anunciante.pack(fill="x", padx=12, pady=(0, 8))
 
         price_row = ctk.CTkFrame(parent, fg_color="transparent")
         price_row.pack(fill="x", padx=12, pady=(0, 8))
@@ -155,22 +165,30 @@ class OlxImoveisApp(ctk.CTk):
     def _populate_estados(self) -> None:
         labels = [f"{uf.upper()} — {nome}" for uf, nome in sorted(ESTADOS.items())]
         self._estado.configure(values=labels)
-        sp_label = next((l for l in labels if l.startswith("SP ")), labels[0])
-        self._estado.set(sp_label)
-        self._on_estado_change(sp_label)
+        default_label = next(
+            (label for label in labels if label.startswith(f"{DEFAULT_UF.upper()} ")),
+            labels[0],
+        )
+        self._estado.set(default_label)
+        self._load_regioes(default_label, prefer_regiao=DEFAULT_REGIAO_NOME)
 
-    def _uf_from_label(self, label: str) -> str:
-        return label.split("—")[0].strip().lower()
-
-    def _on_estado_change(self, _choice: str) -> None:
-        uf = self._uf_from_label(self._estado.get())
+    def _load_regioes(self, estado_label: str, prefer_regiao: str | None = None) -> None:
+        uf = self._uf_from_label(estado_label)
         regions = load_regions(uf)
         self._region_map = {r["nome"]: r["slug"] for r in regions}
         names = list(self._region_map.keys())
         self._regiao.configure(values=names)
-        if names:
-            self._regiao.set(names[0])
-            self._on_regiao_change(names[0])
+        if not names:
+            return
+        selected = prefer_regiao if prefer_regiao in names else names[0]
+        self._regiao.set(selected)
+        self._on_regiao_change(selected)
+
+    def _on_estado_change(self, _choice: str) -> None:
+        self._load_regioes(self._estado.get())
+
+    def _uf_from_label(self, label: str) -> str:
+        return label.split("—")[0].strip().lower()
 
     def _on_regiao_change(self, _choice: str) -> None:
         uf = self._uf_from_label(self._estado.get())
@@ -199,8 +217,24 @@ class OlxImoveisApp(ctk.CTk):
             bairro = self._bairro_map.get(bairro_sel)
 
         label_to_tipo = {v: k for k, v in TIPO_IMOVEL_LABELS.items()}
-        tipo = label_to_tipo[self._tipo.get()]
-        oferta = TipoOferta.ALUGUEL if self._oferta.get() == "Aluguel" else TipoOferta.VENDA
+        tipo_raw = self._tipo.get().strip()
+        tipo = None if tipo_raw == MOSTRAR_TODOS else label_to_tipo[tipo_raw]
+
+        oferta_raw = self._oferta.get().strip().lower()
+        if oferta_raw == MOSTRAR_TODOS.lower():
+            oferta = None
+        elif oferta_raw == "aluguel":
+            oferta = TipoOferta.ALUGUEL
+        else:
+            oferta = TipoOferta.VENDA
+
+        anunciante_raw = self._anunciante.get().strip().lower()
+        if anunciante_raw == MOSTRAR_TODOS.lower():
+            tipo_anunciante = None
+        elif anunciante_raw == "profissional":
+            tipo_anunciante = TipoAnunciante.PROFISSIONAL
+        else:
+            tipo_anunciante = TipoAnunciante.COMUM
 
         pmin = self._parse_int(self._preco_min)
         pmax = self._parse_int(self._preco_max)
@@ -216,6 +250,7 @@ class OlxImoveisApp(ctk.CTk):
             bairro=bairro,
             tipo_imovel=tipo,
             tipo_oferta=oferta,
+            tipo_anunciante=tipo_anunciante,
             preco_min=pmin,
             preco_max=pmax,
             quartos_min=quartos,
@@ -293,7 +328,42 @@ class OlxImoveisApp(ctk.CTk):
             btn.grid(row=0, column=0, columnspan=2, sticky="ew", padx=8, pady=8)
 
         total_txt = f" — total estimado: {result.total}" if result.total else ""
-        self._set_status(f"{len(result.items)} anúncio(s) exibido(s){total_txt}.")
+        filtros = self._format_filter_summary(self._current_filters) if self._current_filters else ""
+        prefix = f"{filtros} — " if filtros else ""
+        self._set_status(f"{prefix}{len(result.items)} anúncio(s) exibido(s){total_txt}.")
+
+    def _format_filter_summary(self, filters: SearchFilters) -> str:
+        if filters.tipo_oferta is None:
+            oferta = MOSTRAR_TODOS
+        else:
+            oferta = "Aluguel" if filters.tipo_oferta == TipoOferta.ALUGUEL else "Venda"
+        if filters.tipo_imovel is None:
+            tipo = MOSTRAR_TODOS
+        else:
+            tipo = TIPO_IMOVEL_LABELS.get(filters.tipo_imovel, filters.tipo_imovel.value)
+        if filters.tipo_anunciante is None:
+            anunciante = MOSTRAR_TODOS
+        elif filters.tipo_anunciante == TipoAnunciante.PROFISSIONAL:
+            anunciante = "Profissional"
+        else:
+            anunciante = "Comum"
+        cidade = self._regiao.get() if hasattr(self, "_regiao") else filters.regiao
+        parts = [oferta, tipo, anunciante, cidade]
+        if filters.bairro:
+            bairro_nome = next(
+                (nome for nome, slug in self._bairro_map.items() if slug == filters.bairro),
+                filters.bairro,
+            )
+            parts.append(bairro_nome)
+        if filters.preco_min is not None or filters.preco_max is not None:
+            pmin = filters.preco_min or "…"
+            pmax = filters.preco_max or "…"
+            parts.append(f"R$ {pmin}-{pmax}")
+        if filters.quartos_min is not None:
+            parts.append(f"{filters.quartos_min}+ quartos")
+        if filters.termo:
+            parts.append(f'"{filters.termo}"')
+        return " · ".join(parts)
 
     def _on_search(self) -> None:
         try:
@@ -303,7 +373,7 @@ class OlxImoveisApp(ctk.CTk):
             return
 
         self._current_filters = filters
-        self._set_status("Buscando na OLX…")
+        self._set_status(f"{self._format_filter_summary(filters)} — buscando…")
         self._clear_detail_ui()
 
         def work():

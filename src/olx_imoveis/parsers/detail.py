@@ -8,22 +8,27 @@ from olx_imoveis.errors import OlxParseError
 from olx_imoveis.models import Anunciante, ImovelDetalhe
 from olx_imoveis.parsers.common import (
     ad_to_resumo,
+    extract_embedded_json_object,
+    extract_ld_json,
     extract_next_data,
     find_ad_object,
+    map_ad_detail_payload,
+    resolve_detail_fetch_url,
 )
 
 
 def parse_detail_page(html: str, url: str) -> ImovelDetalhe:
-    data = extract_next_data(html)
-    ad = find_ad_object(data)
+    ad = _extract_ad_from_html(html, url)
     if not ad:
         raise OlxParseError("Anúncio não encontrado no JSON da página de detalhe.")
 
-    host = urlparse(url).netloc
+    fetch_url = resolve_detail_fetch_url(url)
+    host = urlparse(fetch_url).netloc
     fallback_uf = host.split(".")[0] if host else "sp"
     base = ad_to_resumo(ad, fallback_uf)
     if not base:
         raise OlxParseError("Dados mínimos do anúncio ausentes.")
+    base.pop("url", None)
 
     descricao = _first_str(
         ad.get("body"),
@@ -37,7 +42,7 @@ def parse_detail_page(html: str, url: str) -> ImovelDetalhe:
 
     return ImovelDetalhe(
         **base,
-        url=url,
+        url=_first_str(ad.get("url"), fetch_url, url) or url,
         descricao=descricao,
         imagens=imagens,
         atributos=atributos,
@@ -45,6 +50,24 @@ def parse_detail_page(html: str, url: str) -> ImovelDetalhe:
         telefone=telefone,
         telefone_mascarado=mascarado,
     )
+
+
+def _extract_ad_from_html(html: str, url: str) -> dict[str, Any] | None:
+    if "__NEXT_DATA__" in html:
+        try:
+            data = extract_next_data(html)
+            ad = find_ad_object(data)
+            if ad:
+                return ad
+        except OlxParseError:
+            pass
+
+    ad_detail = extract_embedded_json_object(html, "adDetail")
+    if ad_detail:
+        ld_json = extract_ld_json(html)
+        return map_ad_detail_payload(ad_detail, ld_json=ld_json, page_url=url)
+
+    return None
 
 
 def _first_str(*values: Any) -> str | None:

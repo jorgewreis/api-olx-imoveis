@@ -14,3 +14,9 @@ def test_load_regions_sp():
 def test_load_neighborhoods_sp():
     bairros = load_neighborhoods("sp", "sao-paulo-e-regiao")
     assert any(b["slug"] == "centro" for b in bairros)
+
+
+def test_load_regions_ba_ilheus():
+    regions = load_regions("ba")
+    ilheus = next(r for r in regions if r["nome"] == "Ilhéus")
+    assert ilheus["slug"] == "sul-da-bahia/ilheus"

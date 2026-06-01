@@ -5,7 +5,10 @@ from olx_imoveis.url_builder import build_search_url
 def test_build_basic_url():
     f = SearchFilters(estado="sp", regiao="sao-paulo-e-regiao")
     url = build_search_url(f)
-    assert url == "https://sp.olx.com.br/sao-paulo-e-regiao/imoveis/venda/apartamentos"
+    assert (
+        url
+        == "https://www.olx.com.br/imoveis/venda/apartamentos/estado-sp/sao-paulo-e-regiao?ps=100000"
+    )
 
 
 def test_build_with_filters():
@@ -21,7 +24,8 @@ def test_build_with_filters():
         pagina=2,
     )
     url = build_search_url(f)
-    assert "rj.olx.com.br" in url
+    assert "www.olx.com.br" in url
+    assert "estado-rj" in url
     assert "zona-sul" in url
     assert "aluguel" in url
     assert "casas" in url
@@ -29,3 +33,38 @@ def test_build_with_filters():
     assert "pe=5000" in url
     assert "se=2" in url
     assert "page=2" in url
+
+
+def test_build_todos_oferta_url():
+    f = SearchFilters(
+        estado="ba",
+        regiao="sul-da-bahia/ilheus",
+        tipo_oferta=None,
+        tipo_imovel=TipoImovel.APARTAMENTOS,
+    )
+    url = build_search_url(f)
+    assert url == "https://www.olx.com.br/imoveis/apartamentos/estado-ba/sul-da-bahia/ilheus"
+
+
+def test_build_todos_tipo_url():
+    f = SearchFilters(
+        estado="ba",
+        regiao="sul-da-bahia/ilheus",
+        tipo_oferta=TipoOferta.VENDA,
+        tipo_imovel=None,
+    )
+    url = build_search_url(f)
+    assert url == "https://www.olx.com.br/imoveis/venda/estado-ba/sul-da-bahia/ilheus?ps=100000"
+
+
+def test_build_city_with_macro_region():
+    f = SearchFilters(
+        estado="ba",
+        regiao="sul-da-bahia/ilheus",
+        bairro="centro",
+    )
+    url = build_search_url(f)
+    assert (
+        url
+        == "https://www.olx.com.br/imoveis/venda/apartamentos/estado-ba/sul-da-bahia/ilheus/centro?ps=100000"
+    )

@@ -3,26 +3,23 @@
 import logging
 import time
 
-import httpx
+from curl_cffi.requests import Session
+from curl_cffi.requests.exceptions import RequestException
 
 from olx_imoveis.config import settings
 from olx_imoveis.errors import OlxFetchError, OlxRateLimitError
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_HEADERS = {
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+}
+
 
 class OlxHttpClient:
     def __init__(self) -> None:
         self._last_request_at: float = 0.0
-        self._client = httpx.Client(
-            headers={
-                "User-Agent": settings.user_agent,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "pt-BR,pt;q=0.9",
-            },
-            follow_redirects=True,
-            timeout=settings.request_timeout,
-        )
+        self._client = Session(impersonate="chrome131")
 
     def close(self) -> None:
         self._client.close()
@@ -38,9 +35,14 @@ class OlxHttpClient:
         for attempt in range(settings.max_retries):
             self._throttle()
             try:
-                response = self._client.get(url)
+                response = self._client.get(
+                    url,
+                    headers=_DEFAULT_HEADERS,
+                    timeout=settings.request_timeout,
+                    allow_redirects=True,
+                )
                 self._last_request_at = time.monotonic()
-            except httpx.HTTPError as e:
+            except RequestException as e:
                 last_error = e
                 time.sleep(2**attempt)
                 continue

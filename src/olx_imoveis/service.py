@@ -6,6 +6,7 @@ from olx_imoveis.cache import CacheStore
 from olx_imoveis.client import OlxHttpClient
 from olx_imoveis.config import settings
 from olx_imoveis.models import ImovelDetalhe, SearchFilters, SearchResult
+from olx_imoveis.parsers.common import resolve_detail_fetch_url
 from olx_imoveis.parsers.detail import parse_detail_page
 from olx_imoveis.parsers.listing import parse_listing_page
 from olx_imoveis.url_builder import build_search_url
@@ -39,7 +40,15 @@ class OlxImoveisService:
                 return result
 
         html = self._client.get_html(url)
-        result = parse_listing_page(html, pagina=filters.pagina, fallback_uf=filters.estado)
+        logger.info("Busca OLX: %s", url)
+        result = parse_listing_page(
+            html,
+            pagina=filters.pagina,
+            fallback_uf=filters.estado,
+            tipo_oferta=filters.tipo_oferta,
+            bairro=filters.bairro,
+            tipo_anunciante=filters.tipo_anunciante,
+        )
         result.url_busca = url
 
         if use_cache and result.items:
@@ -51,15 +60,16 @@ class OlxImoveisService:
         return result
 
     def get_detail(self, url: str, use_cache: bool = True) -> ImovelDetalhe:
-        cache_key = f"detail:{url}"
+        fetch_url = resolve_detail_fetch_url(url)
+        cache_key = f"detail:{fetch_url}"
 
         if use_cache:
             cached = self._cache.get_json(cache_key)
             if cached:
                 return ImovelDetalhe.model_validate(cached)
 
-        html = self._client.get_html(url)
-        detail = parse_detail_page(html, url)
+        html = self._client.get_html(fetch_url)
+        detail = parse_detail_page(html, fetch_url)
 
         ttl = settings.detail_cache_ttl_seconds
         if detail.telefone:

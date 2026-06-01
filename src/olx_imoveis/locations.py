@@ -43,6 +43,9 @@ ESTADOS: dict[str, str] = {
     "to": "Tocantins",
 }
 
+DEFAULT_UF = "ba"
+DEFAULT_REGIAO_NOME = "Ilhéus"
+
 DEFAULT_REGIOES: dict[str, list[dict[str, str]]] = {
     "sp": [
         {"slug": "estado-sp", "nome": "Todo o estado"},
@@ -56,6 +59,10 @@ DEFAULT_REGIOES: dict[str, list[dict[str, str]]] = {
     "mg": [
         {"slug": "estado-mg", "nome": "Todo o estado"},
         {"slug": "belo-horizonte-e-regiao", "nome": "Belo Horizonte e região"},
+    ],
+    "ba": [
+        {"slug": "estado-ba", "nome": "Todo o estado"},
+        {"slug": "sul-da-bahia/ilheus", "nome": "Ilhéus"},
     ],
 }
 

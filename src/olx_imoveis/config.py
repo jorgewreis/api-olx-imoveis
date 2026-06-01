@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OLX_", env_file=".env", extra="ignore")
 
-    user_agent: str = "OlxImoveisDesktop/1.0 (+uso pessoal; contato via repositório)"
+    user_agent: str = "OlxImoveisDesktop/1.0 (+uso pessoal; contato via repositorio)"
     request_timeout: float = 30.0
     min_request_interval: float = 1.0
     listing_cache_ttl_seconds: int = 600

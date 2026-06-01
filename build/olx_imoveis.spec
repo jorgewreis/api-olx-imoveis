@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 block_cipher = None
-root = Path(SPECPATH).parent.parent
+root = Path(SPECPATH).parent
 src = root / "src"
 data_dir = root / "data"
 
@@ -21,6 +21,8 @@ a = Analysis(
         "pydantic",
         "pydantic_settings",
         "httpx",
+        "curl_cffi",
+        "curl_cffi.requests",
         "bs4",
     ],
     hookspath=[],
