@@ -1,0 +1,17 @@
+{
+  "regioes": [
+    {"slug": "estado-sp", "nome": "Todo o estado"},
+    {"slug": "sao-paulo-e-regiao", "nome": "São Paulo e região"},
+    {"slug": "campinas-e-regiao", "nome": "Campinas e região"},
+    {"slug": "santos-e-regiao", "nome": "Santos e região"}
+  ],
+  "bairros": {
+    "sao-paulo-e-regiao": [
+      {"slug": "centro", "nome": "Centro"},
+      {"slug": "zona-sul", "nome": "Zona Sul"},
+      {"slug": "zona-norte", "nome": "Zona Norte"},
+      {"slug": "zona-leste", "nome": "Zona Leste"},
+      {"slug": "zona-oeste", "nome": "Zona Oeste"}
+    ]
+  }
+}

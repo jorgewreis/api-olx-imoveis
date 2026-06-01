@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "olx-imoveis"
+version = "1.0.0"
+description = "Busca de imóveis na OLX — desktop"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.27.0",
+    "beautifulsoup4>=4.12.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "customtkinter>=5.2.0",
+    "Pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4.0", "pyinstaller>=6.0.0"]
+
+[project.scripts]
+olx-imoveis = "gui.app:main"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

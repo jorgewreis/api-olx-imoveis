@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+.venv/
+venv/
+.env
+.env.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+tmp_*.html
+AppData/
+
+# PyInstaller
+build/**
+!build/olx_imoveis.spec
+*.spec.bak
+
+# IDE / OS
+.idea/
+.vscode/
+.cursor/
+Thumbs.db
+Desktop.ini
+
+# User data (runtime)
+*.db
