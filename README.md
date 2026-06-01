@@ -136,6 +136,11 @@ api-olx-imoveis/
 - O layout do site pode mudar; nesse caso pode ser necessário atualizar o aplicativo.
 - Os autores **não se responsabilizam** pelo uso que terceiros fizerem da ferramenta em desacordo com a lei ou com os termos da OLX.
 
+## Publicar / clonar
+
+- **Publicar no seu GitHub:** siga [`docs/GITHUB_PUBLISH.md`](docs/GITHUB_PUBLISH.md) ou execute `.\scripts\publish-github.ps1` após `gh auth login`.
+- **Clonar:** `git clone https://github.com/jwmenezes/api-olx-imoveis.git` (ajuste o usuário se o repositório estiver em outra conta).
+
 ## Contribuições
 
 Contribuições são bem-vindas via Issues e Pull Requests. Leia [`CONTRIBUTING.md`](CONTRIBUTING.md) antes de enviar alterações.
