@@ -2,17 +2,14 @@
 
 import logging
 
-from olx_imoveis.auth import OlxOAuth
 from olx_imoveis.cache import CacheStore
 from olx_imoveis.client import OlxHttpClient
 from olx_imoveis.config import settings
-from olx_imoveis.errors import OlxAuthError
 from olx_imoveis.listing_display import sort_imoveis
 from olx_imoveis.models import ImovelDetalhe, ImovelResumo, SearchFilters, SearchResult
 from olx_imoveis.parsers.common import resolve_detail_fetch_url
 from olx_imoveis.parsers.detail import parse_detail_page
 from olx_imoveis.parsers.listing import parse_listing_page
-from olx_imoveis.phone import fetch_full_phone
 from olx_imoveis.url_builder import build_search_url
 
 logger = logging.getLogger(__name__)
@@ -23,23 +20,14 @@ class OlxImoveisService:
         self,
         client: OlxHttpClient | None = None,
         cache: CacheStore | None = None,
-        oauth: OlxOAuth | None = None,
     ) -> None:
         self._client = client or OlxHttpClient()
         self._cache = cache or CacheStore()
-        self._oauth = oauth or OlxOAuth()
         self._owns_client = client is None
-        self._owns_oauth = oauth is None
 
     def close(self) -> None:
         if self._owns_client:
             self._client.close()
-        if self._owns_oauth:
-            self._oauth.close()
-
-    @property
-    def oauth(self) -> OlxOAuth:
-        return self._oauth
 
     def search(self, filters: SearchFilters, use_cache: bool = True) -> SearchResult:
         url = build_search_url(filters)
@@ -81,12 +69,10 @@ class OlxImoveisService:
         if use_cache:
             cached = self._cache.get_json(cache_key)
             if cached:
-                detail = ImovelDetalhe.model_validate(cached)
-                return self._enrich_phone(detail, fetch_url)
+                return ImovelDetalhe.model_validate(cached)
 
         html = self._client.get_html(fetch_url)
         detail = parse_detail_page(html, fetch_url)
-        detail = self._enrich_phone(detail, fetch_url)
 
         ttl = settings.detail_cache_ttl_seconds
         if detail.telefone:
@@ -98,35 +84,6 @@ class OlxImoveisService:
                 detail.model_dump(mode="json"),
                 ttl,
             )
-        return detail
-
-    def _enrich_phone(self, detail: ImovelDetalhe, fetch_url: str) -> ImovelDetalhe:
-        if detail.telefone and not detail.telefone_mascarado:
-            return detail
-        if not self._oauth.is_logged_in():
-            return detail
-
-        token = self._oauth.token
-        if not token:
-            return detail
-
-        try:
-            full = fetch_full_phone(
-                detail.list_id,
-                token.access_token,
-                referer=fetch_url,
-                session=self._oauth.http_session,
-            )
-        except OlxAuthError as e:
-            logger.warning("Sessão OLX inválida ao buscar telefone: %s", e)
-            self._oauth.logout()
-            return detail
-        except Exception as e:
-            logger.warning("Telefone completo indisponível para %s: %s", detail.list_id, e)
-            return detail
-
-        if full:
-            return detail.model_copy(update={"telefone": full, "telefone_mascarado": False})
         return detail
 
     def fetch_export_details(self, items: list[ImovelResumo]) -> list[ImovelDetalhe]:

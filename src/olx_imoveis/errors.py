@@ -15,7 +15,3 @@ class OlxParseError(OlxError):
 
 class OlxRateLimitError(OlxFetchError):
     """HTTP 429 ou bloqueio temporário."""
-
-
-class OlxAuthError(OlxError):
-    """Falha de autenticação OAuth ou sessão OLX."""

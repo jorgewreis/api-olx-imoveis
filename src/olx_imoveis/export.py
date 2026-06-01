@@ -82,17 +82,30 @@ def _export_txt(
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
-def _find_pdf_font() -> str | None:
-    candidates = [
-        Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "arial.ttf",
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-        Path("/usr/share/fonts/TTF/DejaVuSans.ttf"),
-        Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
+def _find_pdf_fonts() -> tuple[str | None, str | None]:
+    """Retorna (regular, bold) para suporte a negrito no PDF."""
+    pairs = [
+        (
+            Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "arial.ttf",
+            Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "arialbd.ttf",
+        ),
+        (
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ),
+        (
+            Path("/usr/share/fonts/TTF/DejaVuSans.ttf"),
+            Path("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"),
+        ),
+        (
+            Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
+            Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+        ),
     ]
-    for candidate in candidates:
-        if candidate.is_file():
-            return str(candidate)
-    return None
+    for regular, bold in pairs:
+        if regular.is_file():
+            return str(regular), str(bold) if bold.is_file() else str(regular)
+    return None, None
 
 
 def _pdf_safe(text: str) -> str:
@@ -120,10 +133,10 @@ def _export_pdf(
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
 
-    font_path = _find_pdf_font()
-    if font_path:
-        pdf.add_font("ExportFont", "", font_path)
-        pdf.add_font("ExportFont", "B", font_path)
+    font_regular, font_bold = _find_pdf_fonts()
+    if font_regular:
+        pdf.add_font("ExportFont", "", font_regular)
+        pdf.add_font("ExportFont", "B", font_bold)
         body_font = "ExportFont"
     else:
         body_font = "Helvetica"
