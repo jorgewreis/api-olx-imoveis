@@ -9,10 +9,13 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     Write-Error "GitHub CLI (gh) nao encontrado. Instale: winget install GitHub.cli --scope user"
 }
 
-gh auth status 2>$null
+$null = gh auth status 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Faca login no GitHub (abrira o navegador ou codigo em https://github.com/login/device):"
     gh auth login --hostname github.com --git-protocol https --web --skip-ssh-key
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Login no GitHub nao concluido. Execute: gh auth login"
+    }
 }
 
 $user = gh api user -q .login
