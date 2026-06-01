@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import csv
 import logging
 import sys
 import threading
 import webbrowser
-from pathlib import Path
 from tkinter import messagebox
 from typing import Callable
 
@@ -18,8 +16,6 @@ from olx_imoveis.auth import OlxOAuth, oauth_configured
 from olx_imoveis.errors import OlxError, OlxAuthError, OlxParseError, OlxRateLimitError
 from olx_imoveis.locations import DEFAULT_REGIAO_NOME, DEFAULT_UF, ESTADOS, load_neighborhoods, load_regions
 from olx_imoveis.models import (
-    MAX_ALUGUEL_PRECO,
-    MIN_VENDA_PRECO,
     ImovelDetalhe,
     ImovelResumo,
     SearchFilters,
@@ -28,9 +24,19 @@ from olx_imoveis.models import (
     TipoImovel,
     TipoOferta,
 )
+from olx_imoveis.export import ExportFormat, default_export_path, export_results
+from olx_imoveis.listing_display import (
+    clean_text,
+    format_features,
+    format_location,
+    format_price,
+    oferta_label,
+)
 from olx_imoveis.service import OlxImoveisService
 
 from gui.disclaimer import show_disclaimer
+
+EXPORT_FORMATS = [ExportFormat.CSV.value, ExportFormat.PDF.value, ExportFormat.TXT.value]
 
 logging.basicConfig(
     filename=settings.logs_dir / "app.log",
@@ -156,9 +162,16 @@ class OlxImoveisApp(ctk.CTk):
         ctk.CTkButton(
             parent, text="Carregar mais", fg_color="gray", command=self._on_load_more
         ).pack(fill="x", padx=12, pady=(0, 6))
-        ctk.CTkButton(
-            parent, text="Exportar CSV", fg_color="gray", command=self._export_csv
-        ).pack(fill="x", padx=12, pady=(0, 6))
+        export_row = ctk.CTkFrame(parent, fg_color="transparent")
+        export_row.pack(fill="x", padx=12, pady=(0, 6))
+        ctk.CTkLabel(export_row, text="Exportar como").grid(row=0, column=0, sticky="w")
+        self._export_fmt = ctk.CTkComboBox(export_row, values=EXPORT_FORMATS, width=100)
+        self._export_fmt.set(ExportFormat.CSV.value)
+        self._export_fmt.grid(row=1, column=0, sticky="w", pady=(2, 0))
+        ctk.CTkButton(export_row, text="Exportar", fg_color="gray", command=self._export_results).grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(2, 0)
+        )
+        export_row.grid_columnconfigure(1, weight=1)
         self._build_auth_section(parent)
         ctk.CTkButton(parent, text="Sobre / Aviso legal", fg_color="transparent", command=self._show_about).pack(
             fill="x", padx=12, pady=(0, 12)
@@ -404,70 +417,107 @@ class OlxImoveisApp(ctk.CTk):
         if not result.items and not append:
             ctk.CTkLabel(
                 self._results_frame,
-                text="Nenhum imóvel encontrado. Ajuste os filtros.",
-            ).grid(sticky="w", padx=8, pady=8)
+                text="Nenhum imóvel encontrado.\nAjuste os filtros e tente novamente.",
+                justify="left",
+                font=ctk.CTkFont(size=13),
+            ).grid(row=0, column=0, sticky="w", padx=12, pady=16)
+            self._set_status("Nenhum resultado.")
             return
 
         start = len(self._results_frame.winfo_children()) if append else 0
-        for i, item in enumerate(result.items):
-            row = ctk.CTkFrame(self._results_frame)
-            row.grid(row=start + i, column=0, sticky="ew", padx=4, pady=4)
-            row.grid_columnconfigure(1, weight=1)
-
-            text = f"{self._format_listing_headline(item)}\n{item.titulo}"
-
-            btn = ctk.CTkButton(
-                row,
-                text=text,
+        if not append and self._current_filters:
+            header = ctk.CTkLabel(
+                self._results_frame,
+                text=self._format_filter_summary(self._current_filters),
+                font=ctk.CTkFont(size=12),
+                text_color=("gray40", "gray60"),
+                wraplength=520,
+                justify="left",
                 anchor="w",
-                fg_color=("gray85", "gray25"),
-                text_color=("black", "white"),
-                command=lambda it=item: self._on_select_item(it),
             )
-            btn.grid(row=0, column=0, columnspan=2, sticky="ew", padx=8, pady=8)
+            header.grid(row=0, column=0, sticky="ew", padx=10, pady=(4, 8))
+            start = 1
+
+        for i, item in enumerate(result.items):
+            self._build_result_card(item, row=start + i)
 
         total_txt = f" — total estimado: {result.total}" if result.total else ""
+        count = len(self._last_result.items) if self._last_result else len(result.items)
         filtros = self._format_filter_summary(self._current_filters) if self._current_filters else ""
         prefix = f"{filtros} — " if filtros else ""
-        self._set_status(f"{prefix}{len(result.items)} anúncio(s) exibido(s){total_txt}.")
+        self._set_status(f"{prefix}{count} anúncio(s) exibido(s){total_txt}.")
 
-    def _format_listing_headline(self, item: ImovelResumo) -> str:
-        loc_parts: list[str] = []
-        if item.estado:
-            loc_parts.append(item.estado.upper())
-        if item.cidade:
-            loc_parts.append(item.cidade)
-        if item.bairro:
-            loc_parts.append(item.bairro)
-        loc = " - ".join(loc_parts) if loc_parts else "Local não informado"
-        tipo = self._tipo_oferta_label(item)
-        preco = self._format_item_price(item)
-        return f"{loc} | {tipo}: {preco}"
+    def _build_result_card(self, item: ImovelResumo, row: int) -> None:
+        selected = self._selected is not None and self._selected.list_id == item.list_id
+        border_color = ("#3B8ED0", "#1F6AA5") if selected else ("gray80", "gray35")
+        fg_color = ("#E8F4FC", "gray22") if selected else ("gray95", "gray18")
 
-    def _tipo_oferta_label(self, item: ImovelResumo) -> str:
-        ot = (self._current_filters.tipo_oferta if self._current_filters else None) or item.tipo_oferta
-        if ot is not None:
-            return ot.value.upper()
-        if item.preco is not None:
-            if item.preco >= MIN_VENDA_PRECO:
-                return "VENDA"
-            if item.preco <= MAX_ALUGUEL_PRECO:
-                return "ALUGUEL"
-        return "VENDA"
+        card = ctk.CTkFrame(
+            self._results_frame,
+            fg_color=fg_color,
+            border_width=1,
+            border_color=border_color,
+            corner_radius=8,
+        )
+        card.grid(row=row, column=0, sticky="ew", padx=8, pady=6)
+        card.grid_columnconfigure(0, weight=1)
 
-    @staticmethod
-    def _format_item_price(item: ImovelResumo) -> str:
-        if item.preco is not None:
-            inteiro = f"{item.preco:,}".replace(",", ".")
-            return f"R$ {inteiro},00"
-        if item.preco_label:
-            label = item.preco_label.strip()
-            if not label.upper().startswith("R$"):
-                label = f"R$ {label}"
-            if "," not in label:
-                label = f"{label},00"
-            return label
-        return "Consulte"
+        top = ctk.CTkFrame(card, fg_color="transparent")
+        top.grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 4))
+        top.grid_columnconfigure(1, weight=1)
+
+        price_text = format_price(item)
+        ctk.CTkLabel(
+            top,
+            text=price_text,
+            font=ctk.CTkFont(size=15, weight="bold"),
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w")
+
+        offer = oferta_label(item, self._current_filters)
+        ctk.CTkLabel(
+            top,
+            text=offer,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("gray30", "gray70"),
+            anchor="e",
+        ).grid(row=0, column=1, sticky="e")
+
+        ctk.CTkLabel(
+            card,
+            text=format_location(item),
+            font=ctk.CTkFont(size=12),
+            text_color=("gray35", "gray65"),
+            anchor="w",
+            justify="left",
+        ).grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 6))
+
+        title = clean_text(item.titulo)
+        ctk.CTkLabel(
+            card,
+            text=title,
+            font=ctk.CTkFont(size=13),
+            anchor="w",
+            justify="left",
+            wraplength=520,
+        ).grid(row=2, column=0, sticky="ew", padx=14, pady=(0, 6))
+
+        features = format_features(item)
+        meta_parts = [p for p in [features, f"ID {item.list_id}"] if p]
+        ctk.CTkLabel(
+            card,
+            text=" · ".join(meta_parts),
+            font=ctk.CTkFont(size=11),
+            text_color=("gray45", "gray55"),
+            anchor="w",
+        ).grid(row=3, column=0, sticky="ew", padx=14, pady=(0, 8))
+
+        ctk.CTkButton(
+            card,
+            text="Ver detalhes",
+            height=30,
+            command=lambda it=item: self._on_select_item(it),
+        ).grid(row=4, column=0, sticky="ew", padx=14, pady=(0, 12))
 
     def _format_filter_summary(self, filters: SearchFilters) -> str:
         if filters.tipo_oferta is None:
@@ -540,7 +590,9 @@ class OlxImoveisApp(ctk.CTk):
 
     def _on_select_item(self, item: ImovelResumo) -> None:
         self._selected = item
-        self._set_status(f"Carregando detalhe: {item.titulo[:40]}…")
+        if self._last_result:
+            self._render_results(self._last_result)
+        self._set_status(f"Carregando detalhe: {clean_text(item.titulo)[:50]}…")
         self._clear_detail_ui()
 
         def work():
@@ -558,16 +610,16 @@ class OlxImoveisApp(ctk.CTk):
         ).grid(row=r, column=0, sticky="w", padx=8, pady=4)
         r += 1
 
-        preco = d.preco_label or (f"R$ {d.preco:,}".replace(",", ".") if d.preco else "")
-        if preco:
-            ctk.CTkLabel(self._detail_frame, text=preco, font=ctk.CTkFont(size=14)).grid(
+        preco = format_price(d)
+        if preco != "Consulte":
+            ctk.CTkLabel(self._detail_frame, text=preco, font=ctk.CTkFont(size=14, weight="bold")).grid(
                 row=r, column=0, sticky="w", padx=8
             )
             r += 1
 
-        loc = ", ".join(x for x in [d.bairro, d.cidade, d.estado] if x)
-        if loc:
-            ctk.CTkLabel(self._detail_frame, text=loc).grid(row=r, column=0, sticky="w", padx=8)
+        loc = format_location(d)
+        if loc != "Local não informado":
+            ctk.CTkLabel(self._detail_frame, text=loc).grid(row=r, column=0, sticky="w", padx=8, pady=(0, 4))
             r += 1
 
         if d.atributos:
@@ -628,19 +680,29 @@ class OlxImoveisApp(ctk.CTk):
         self.clipboard_append(text)
         self._set_status("Telefone copiado.")
 
-    def _export_csv(self) -> None:
+    def _export_results(self) -> None:
         if not self._last_result or not self._last_result.items:
             self._show_error("Não há resultados para exportar.")
             return
-        path = settings.app_data_dir / "resultados_olx.csv"
-        with path.open("w", newline="", encoding="utf-8-sig") as f:
-            w = csv.writer(f, delimiter=";")
-            w.writerow(["list_id", "titulo", "preco", "bairro", "cidade", "estado", "url"])
-            for it in self._last_result.items:
-                w.writerow(
-                    [it.list_id, it.titulo, it.preco, it.bairro, it.cidade, it.estado, it.url]
-                )
-        messagebox.showinfo("Exportado", f"Arquivo salvo em:\n{path}")
+        fmt = ExportFormat(self._export_fmt.get())
+        path = default_export_path(settings.app_data_dir, fmt)
+        summary = (
+            self._format_filter_summary(self._current_filters) if self._current_filters else None
+        )
+        try:
+            export_results(
+                self._last_result.items,
+                fmt,
+                path,
+                filter_summary=summary,
+                filters=self._current_filters,
+            )
+        except Exception as e:
+            logging.exception("Falha na exportação")
+            self._show_error(f"Não foi possível exportar: {e}")
+            return
+        messagebox.showinfo("Exportado", f"Arquivo {fmt.value} salvo em:\n{path}")
+        self._set_status(f"Exportação {fmt.value} concluída.")
 
     def _show_about(self) -> None:
         messagebox.showinfo(

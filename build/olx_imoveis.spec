@@ -24,6 +24,7 @@ a = Analysis(
         "curl_cffi",
         "curl_cffi.requests",
         "bs4",
+        "fpdf",
     ],
     hookspath=[],
     hooksconfig={},
