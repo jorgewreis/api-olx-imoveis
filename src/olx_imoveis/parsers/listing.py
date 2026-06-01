@@ -20,6 +20,7 @@ from olx_imoveis.parsers.common import (
     deep_find,
     extract_next_data,
     find_ads_list,
+    is_professional_ad,
     slugify_label,
 )
 
@@ -127,7 +128,7 @@ def _matches_bairro(ad: dict[str, Any], bairro_slug: str) -> bool:
 
 
 def _matches_anunciante_tipo(ad: dict[str, Any], tipo: TipoAnunciante) -> bool:
-    is_pro = bool(ad.get("professionalAd"))
+    is_pro = is_professional_ad(ad)
     if tipo == TipoAnunciante.PROFISSIONAL:
         return is_pro
     return not is_pro

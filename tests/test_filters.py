@@ -7,8 +7,8 @@ from olx_imoveis.models import (
     TipoAnunciante,
     TipoOferta,
 )
+from olx_imoveis.parsers.common import is_professional_ad, slugify_label
 from olx_imoveis.parsers.listing import _matches_anunciante_tipo, _matches_bairro, _matches_offer_type, _matches_price_range
-from olx_imoveis.parsers.common import slugify_label
 from olx_imoveis.url_builder import build_search_url, effective_price_range
 
 
@@ -104,3 +104,16 @@ def test_anunciante_url_and_filter():
     assert not _matches_anunciante_tipo({"professionalAd": True}, TipoAnunciante.COMUM)
     assert _matches_anunciante_tipo({"professionalAd": True}, TipoAnunciante.PROFISSIONAL)
     assert not _matches_anunciante_tipo({"professionalAd": False}, TipoAnunciante.PROFISSIONAL)
+
+
+def test_creci_in_description_counts_as_professional():
+    ad = {"professionalAd": False, "body": "Corretor credenciado CRECI/BA 12345"}
+    assert is_professional_ad(ad)
+    assert _matches_anunciante_tipo(ad, TipoAnunciante.PROFISSIONAL)
+    assert not _matches_anunciante_tipo(ad, TipoAnunciante.COMUM)
+
+    ad_no_creci = {"professionalAd": False, "body": "Apartamento à venda, porteira fechada."}
+    assert not is_professional_ad(ad_no_creci)
+    assert _matches_anunciante_tipo(ad_no_creci, TipoAnunciante.COMUM)
+
+    assert is_professional_ad({"professionalAd": False}, descricao="Entre em contato. CRECI 98765.")

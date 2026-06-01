@@ -12,6 +12,7 @@ from olx_imoveis.parsers.common import (
     extract_ld_json,
     extract_next_data,
     find_ad_object,
+    is_professional_ad,
     map_ad_detail_payload,
     resolve_detail_fetch_url,
 )
@@ -37,7 +38,7 @@ def parse_detail_page(html: str, url: str) -> ImovelDetalhe:
     )
     imagens = _collect_images(ad)
     atributos = _collect_attributes(ad)
-    anunciante = _parse_seller(ad)
+    anunciante = _parse_seller(ad, descricao=descricao)
     telefone, mascarado = _parse_phone(ad)
 
     return ImovelDetalhe(
@@ -115,13 +116,13 @@ def _collect_attributes(ad: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _parse_seller(ad: dict[str, Any]) -> Anunciante:
+def _parse_seller(ad: dict[str, Any], *, descricao: str | None = None) -> Anunciante:
     user = ad.get("user") or ad.get("seller") or ad.get("account") or {}
     if not isinstance(user, dict):
-        return Anunciante()
+        user = {}
     nome = _first_str(user.get("name"), user.get("nickname"), user.get("publicName"))
     account_id = _first_str(user.get("publicAccountId"), user.get("accountId"), user.get("id"))
-    is_pro = bool(user.get("isProfessional") or user.get("professional") or user.get("is_pro"))
+    is_pro = is_professional_ad(ad, descricao=descricao)
     profile = _first_str(user.get("profileUrl"), user.get("url"))
     return Anunciante(
         nome=nome,

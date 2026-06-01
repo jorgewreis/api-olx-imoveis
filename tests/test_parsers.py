@@ -44,6 +44,17 @@ def test_parse_detail_ad_detail_fixture():
     assert len(detail.imagens) == 1
 
 
+def test_detail_creci_marks_common_seller_as_professional():
+    html = (FIXTURES / "detail_sample.html").read_text(encoding="utf-8")
+    html = html.replace(
+        "Apartamento amplo com varanda.",
+        "Apartamento amplo com varanda. CRECI/SP 123456.",
+    )
+    html = html.replace('"isProfessional": true', '"isProfessional": false')
+    detail = parse_detail_page(html, "https://sp.olx.com.br/vi/100001.htm")
+    assert detail.anunciante.is_professional is True
+
+
 def test_parse_listing_missing_data():
     with pytest.raises(OlxParseError):
         parse_listing_page("<html><body>sem dados</body></html>")

@@ -139,6 +139,31 @@ def slugify_label(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
 
 
+_CRECI_PATTERN = re.compile(r"creci", re.IGNORECASE)
+
+
+def is_professional_ad(ad: dict[str, Any], *, descricao: str | None = None) -> bool:
+    """Anunciante profissional pela OLX ou por menção a CRECI na descrição."""
+    if ad.get("professionalAd"):
+        return True
+    user = ad.get("user") or ad.get("seller") or ad.get("account") or {}
+    if isinstance(user, dict) and (
+        user.get("isProfessional") or user.get("professional") or user.get("is_pro")
+    ):
+        return True
+
+    texts: list[str] = []
+    for key in ("body", "description", "observation"):
+        val = ad.get(key)
+        if val:
+            texts.append(str(val))
+    if descricao:
+        texts.append(descricao)
+    if texts and _CRECI_PATTERN.search("\n".join(texts)):
+        return True
+    return False
+
+
 def _location_parts(ad: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
     loc = ad.get("locationDetails") or ad.get("location") or ad.get("locations") or {}
     if isinstance(loc, list) and loc:
